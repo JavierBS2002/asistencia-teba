@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prueba de conexión · Asistencia TEBA</title>
+<style>
+  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #F7F3F1; color: #1F1A1C; }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 40px; }
+  h1 { font-size: 22px; margin: 0 0 4px; color: #7B1E3A; }
+  p.sub { margin: 0 0 18px; color: #6B5F63; }
+  .paso { background: #fff; border: 1px solid #EDE3E0; border-radius: 14px; padding: 14px 16px; margin-bottom: 10px; }
+  .paso b { display: block; margin-bottom: 4px; }
+  .ok { border-left: 0; outline: 2px solid #2E7D32; }
+  .mal { outline: 2px solid #C62828; }
+  .esp { color: #6B5F63; }
+  code { background: #F1EDEB; padding: 2px 6px; border-radius: 6px; word-break: break-all; font-size: 13px; }
+  button { margin-top: 8px; height: 46px; padding: 0 18px; border: none; border-radius: 12px; background: #7B1E3A; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .final { font-size: 16px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Prueba de conexión</h1>
+  <p class="sub">Revisa, paso por paso, que la app pueda hablar con su Apps Script.</p>
+  <div id="pasos"></div>
+  <div id="final" class="paso final esp">Probando…</div>
+  <button onclick="location.reload()">Volver a probar</button>
+</main>
+<script>
+(function () {
+  var $p = document.getElementById('pasos'), $f = document.getElementById('final');
+  function paso(estado, titulo, detalle) {
+    var d = document.createElement('div');
+    d.className = 'paso ' + (estado === 'ok' ? 'ok' : estado === 'mal' ? 'mal' : '');
+    d.innerHTML = '<b>' + (estado === 'ok' ? '✅ ' : estado === 'mal' ? '❌ ' : '⏳ ') + titulo + '</b><span class="esp">' + detalle + '</span>';
+    $p.appendChild(d);
+  }
+  function fin(txt, bien) { $f.className = 'paso final ' + (bien ? 'ok' : 'mal'); $f.innerHTML = txt; }
+  var nav = /Brave/.test(navigator.userAgent) || (navigator.brave ? 'Brave' : '');
+  paso('', 'Navegador', (navigator.brave ? '<b>Brave</b> (si falla, pruebe en Google Chrome o desactive los escudos 🦁 para este sitio)' : navigator.userAgent.match(/(Edg|Chrome|Safari|Firefox)\/[\d.]+/) ? navigator.userAgent.match(/(Edg|Chrome|Safari|Firefox)\/[\d.]+/)[0] : 'desconocido') + ' · internet: ' + (navigator.onLine ? 'sí' : 'NO'));
+
+  fetch('config.js', { cache: 'no-store' }).then(function (r) {
+    if (!r.ok) throw new Error('config.js respondió ' + r.status);
+    return r.text();
+  }).then(function (t) {
+    var m = /API_URL\s*=\s*['"]([^'"]+)['"]/.exec(t);
+    if (!m) { paso('mal', '1. Leer config.js', 'No encontré la línea <code>window.API_URL = \'…\';</code>. Revise que tenga comillas simples rectas.'); fin('Corrija <b>config.js</b> en GitHub (lápiz ✏️) y vuelva a probar.'); return; }
+    var url = m[1].trim();
+    if (/PEGUE/.test(url)) { paso('mal', '1. Leer config.js', 'Todavía dice <code>PEGUE_AQUI…</code>.'); fin('Pegue su URL /exec en <b>config.js</b> en GitHub y vuelva a probar.'); return; }
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/[^\/]+\/exec$/.test(url)) {
+      paso('mal', '1. Leer config.js', 'La URL no tiene la forma correcta:<br><code>' + url + '</code><br>Debe ser <code>https://script.google.com/macros/s/…/exec</code> (sin espacios, sin ?ping=1, sin /dev, no la de googleusercontent).');
+      fin('Corrija la URL en <b>config.js</b> y vuelva a probar.'); return;
+    }
+    paso('ok', '1. Leer config.js', 'URL encontrada:<br><code>' + url + '</code>');
+
+    // 2. GET ?ping=1 (lo mismo que abrirla en el navegador, pero desde la app)
+    return fetch(url + '?ping=1', { redirect: 'follow' }).then(function (r) { return r.text(); }).then(function (t) {
+      var j = null; try { j = JSON.parse(t); } catch (e) {}
+      if (j && j.ok) paso('ok', '2. El servidor responde', 'Hoja: <b>' + (j.hoja || '') + '</b> · versión ' + (j.version || '¿?') + ' · doPost: ' + (j.doPost ? 'sí' : '<b>NO</b>'));
+      else if (/<html/i.test(t)) paso('mal', '2. El servidor responde', 'Respondió una página en lugar de datos: esa implementación tiene el código viejo. Pegue el Código.gs nuevo y publique una <b>Nueva versión</b> (lápiz ✏️, no "Nueva implementación").');
+      else paso('mal', '2. El servidor responde', 'Respuesta inesperada: <code>' + t.slice(0, 120).replace(/</g, '&lt;') + '</code>');
+      return j && j.ok;
+    }, function (e) {
+      paso('mal', '2. El servidor responde', 'No hubo respuesta (' + e.message + '). Causas: el navegador lo bloqueó (Brave / bloqueador de anuncios), o el acceso no es "Cualquier usuario".');
+      return false;
+    }).then(function (pingOk) {
+      // 3. POST igual que la app (apiLogin con datos de prueba: debe contestar "PIN incorrecto" o similar)
+      return fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: 'apiLogin', args: ['prueba@prueba.mx', '0000'] }), redirect: 'follow' })
+        .then(function (r) { return r.text(); }).then(function (t) {
+          var j = null; try { j = JSON.parse(t); } catch (e) {}
+          if (j && ('ok' in j)) {
+            paso('ok', '3. La app puede enviar datos', 'El servidor contestó: <code>' + (j.ok ? 'ok' : (j.e || '')) + '</code> (es normal que diga que el usuario no existe: era una prueba).');
+            fin('🎉 <b>Todo bien.</b> La conexión funciona. Abra la app, en la computadora presione <b>Ctrl + Shift + R</b> (en el celular ciérrela y ábrala de nuevo) y entre con su correo y PIN de <b>esa</b> hoja.', true);
+          } else {
+            paso('mal', '3. La app puede enviar datos', 'Respuesta inesperada: <code>' + t.slice(0, 160).replace(/</g, '&lt;') + '</code>');
+            fin('El servidor no tiene la función doPost publicada. Pegue el Código.gs nuevo y publique una <b>Nueva versión</b>.');
+          }
+        }, function (e) {
+          paso('mal', '3. La app puede enviar datos', 'Falló el envío (' + e.message + ').');
+          fin(pingOk
+            ? 'El servidor sí responde, pero <b>este navegador bloquea el envío</b>. Abra esta misma página en <b>Google Chrome</b> (no Brave) o desactive los escudos 🦁 de Brave para este sitio y vuelva a probar.'
+            : 'No se pudo conectar. Revise en Apps Script: <b>Ejecutar como: Yo</b>, <b>Quién tiene acceso: Cualquier usuario</b> y una <b>Nueva versión</b> publicada. Luego pruebe en <b>Google Chrome</b>.');
+        });
+    });
+  }).catch(function (e) {
+    paso('mal', '1. Leer config.js', e.message);
+    fin('No se encontró config.js en este sitio. Revise que esté subido junto a index.html.');
+  });
+})();
+</script>
+</body>
+</html>
