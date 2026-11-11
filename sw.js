@@ -3,7 +3,7 @@
 //   se vean de inmediato; si no hay conexión, se usa la copia guardada.
 // - Íconos y demás archivos: se muestra lo guardado y se actualiza por detrás.
 // Los datos de asistencia NO pasan por aquí: van directo al servidor.
-const CACHE = 'asistencia-teba-v9';
+const CACHE = 'asistencia-teba-clasica-v4';
 const ARCHIVOS = ['./', './index.html', './direccion.js', './config.js', './manifest.webmanifest', './icono-192.png', './icono-512.png', './icono-apple.png'];
 
 self.addEventListener('install', (e) => {
